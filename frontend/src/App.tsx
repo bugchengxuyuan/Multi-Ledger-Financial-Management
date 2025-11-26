@@ -1,16 +1,13 @@
 import { useEffect, useState } from 'react'
-import { Home, Receipt, Calendar, TrendingUp, FileText, Settings as SettingsIcon, Moon, Sun, BookOpen, CreditCard, Wallet, CircleDollarSign } from 'lucide-react'
+import { Home, Receipt, BookOpen, Tag, Moon, Sun } from 'lucide-react'
 import { useFinanceStore } from '@/store/useFinanceStore'
 import { useTheme } from '@/contexts/ThemeContext'
 import Dashboard from '@/pages/DashboardNew'
 import Transactions from '@/pages/Transactions'
-import Planning from '@/pages/Planning'
-import Reimbursement from '@/pages/Reimbursement'
-import Settings from '@/pages/Settings'
-import CreditAccounts from '@/pages/CreditAccounts'
-import Balance from '@/pages/Balance'
+import AccountBooks from '@/pages/AccountBooks'
+import Tags from '@/pages/Tags'
 
-type PageId = 'dashboard' | 'transactions' | 'balance' | 'planning' | 'reimbursement' | 'creditAccounts' | 'settings'
+type PageId = 'dashboard' | 'transactions' | 'accountBooks' | 'tags'
 
 function App() {
   const [currentPage, setCurrentPage] = useState<PageId>('dashboard')
@@ -24,23 +21,17 @@ function App() {
   const pages = {
     dashboard: Dashboard,
     transactions: Transactions,
-    balance: Balance,
-    planning: Planning,
-    reimbursement: Reimbursement,
-    creditAccounts: CreditAccounts,
-    settings: Settings,
+    accountBooks: AccountBooks,
+    tags: Tags,
   }
 
   const CurrentPageComponent = pages[currentPage]
 
   const navItems = [
-    { id: 'dashboard' as PageId, icon: Home, label: '仪表盘' },
-    { id: 'transactions' as PageId, icon: Receipt, label: '交易记录' },
-    { id: 'balance' as PageId, icon: Wallet, label: '余额' },
-    { id: 'planning' as PageId, icon: Calendar, label: '规划' },
-    { id: 'reimbursement' as PageId, icon: FileText, label: '报销' },
-    { id: 'creditAccounts' as PageId, icon: CreditCard, label: '信用账户' },
-    { id: 'settings' as PageId, icon: SettingsIcon, label: '设置' },
+    { id: 'dashboard' as PageId, icon: Home, label: '首页' },
+    { id: 'transactions' as PageId, icon: Receipt, label: '交易' },
+    { id: 'accountBooks' as PageId, icon: BookOpen, label: '账本' },
+    { id: 'tags' as PageId, icon: Tag, label: '标签' },
   ]
 
   if (isLoading) {
@@ -142,7 +133,7 @@ function App() {
       {/* 移动端底部导航栏 */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-t border-slate-200 dark:border-slate-700 shadow-xl">
         <div className="flex justify-around items-center h-16">
-          {navItems.slice(0, 5).map((item) => {
+          {navItems.map((item) => {
             const Icon = item.icon
             const isActive = currentPage === item.id
             return (

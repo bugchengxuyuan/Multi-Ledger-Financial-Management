@@ -29,26 +29,16 @@ app.get('/health', (req, res) => {
 })
 
 // ===== API 路由 =====
-import transactionsRouter from './routes/transactions'  // 新增：统一交易路由
-import expensesRouter from './routes/expenses'
-import incomesRouter from './routes/incomes'
+import transactionsRouter from './routes/transactions'
 import accountBooksRouter from './routes/accountBooks'
 import reimbursementsRouter from './routes/reimbursements'
-import investmentsRouter from './routes/investments'
-import budgetsRouter from './routes/budgets'
 import configRouter from './routes/config'
-import creditAccountsRouter from './routes/creditAccounts'
 import tagsRouter from './routes/tags'
 
-app.use('/api/transactions', transactionsRouter)  // 新增：统一交易API
-app.use('/api/expenses', expensesRouter)          // 保留用于兼容
-app.use('/api/incomes', incomesRouter)            // 保留用于兼容
+app.use('/api/transactions', transactionsRouter)
 app.use('/api/account-books', accountBooksRouter)
-app.use('/api/reimbursements', reimbursementsRouter)
-app.use('/api/investments', investmentsRouter)    // 保留用于兼容
-app.use('/api/budgets', budgetsRouter)
+app.use('/api/reimbursements', reimbursementsRouter)  // 后端保留，前端隐藏
 app.use('/api/config', configRouter)
-app.use('/api/credit-accounts', creditAccountsRouter)
 app.use('/api/tags', tagsRouter)
 
 // 根路由
