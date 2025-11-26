@@ -1,4 +1,5 @@
-// Prisma Schema for Jiebei Finance Management System
+// V1 Prisma Schema - 多账本财务管理系统
+// 基于业界最佳实践简化设计（参考 Firefly III、MoneyNote）
 
 datasource db {
   provider = "postgresql"
@@ -9,344 +10,162 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// 支出表
-model Expense {
-  id                  String         @id @default(uuid())
-  date                DateTime       @db.Date
-  categoryTagId       String         // 分类标签ID（替代原来的 category 字符串）
-  amount              Decimal        @db.Decimal(10, 2)
-  description         String         @db.VarChar(255)
-  needsReimbursement  Boolean        @default(false)
-  labelTagIds         String[]       // 普通标签ID数组（替代原来的 tags）
-  accountBookId       String?
-  note                String?        @db.Text
-  receiptPhoto        String?
-  location            String?
-  createdAt           DateTime       @default(now())
-  updatedAt           DateTime       @updatedAt
+// ============================================================================
+// 账本表 - 核心实体
+// 参考: MoneyNote的AccountBook + Firefly III的Account
+// ============================================================================
+model AccountBook {
+  id              String   @id @default(uuid())
+  name            String   @unique @db.VarChar(100) // 账本名称（唯一）
+
+  // 账本类型（只是标签，不影响功能）
+  type            String   @default("personal") @db.VarChar(20) // 'personal' | 'business' | 'partner'
+
+  // 余额相关（Firefly III实践）
+  openingBalance  Decimal  @default(0) @db.Decimal(15, 2) // 期初余额
+  currentBalance  Decimal  @default(0) @db.Decimal(15, 2) // 当前余额（自动计算）
+
+  // 显示相关（MoneyNote实践）
+  color           String   @default("#1890ff") @db.VarChar(20) // 账本颜色
+  icon            String   @default("book") @db.VarChar(50)    // 账本图标
+
+  // 系统相关
+  isDefault       Boolean  @default(false) // 是否默认账本（唯一）
+  description     String?  @db.Text        // 账本描述
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   // 关系
-  reimbursement       Reimbursement? @relation("ExpenseReimbursement")
-  accountBook         AccountBook?   @relation(fields: [accountBookId], references: [id], onDelete: SetNull)
-  categoryTag         Tag            @relation("ExpenseCategoryTag", fields: [categoryTagId], references: [id], onDelete: Restrict)
-
-  @@index([date])
-  @@index([categoryTagId])
-  @@index([accountBookId])
-}
-
-// 报销表
-model Reimbursement {
-  id              String    @id @default(uuid())
-  date            DateTime  @db.Date
-  item            String    @db.VarChar(255)
-  amount          Decimal   @db.Decimal(10, 2)
-  note            String    @db.Text
-  status          String    @default("pending") // 'pending' | 'reimbursed'
-  reimbursedDate  DateTime?
-  expenseId       String?   @unique  // 保留用于迁移
-  transactionId   String?   @unique  // 关联到Transaction
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  // 关系
-  expense         Expense?      @relation("ExpenseReimbursement", fields: [expenseId], references: [id], onDelete: SetNull)
-  transaction     Transaction?  @relation("TransactionReimbursement", fields: [transactionId], references: [id], onDelete: SetNull)
-
-  @@index([status])
-}
-
-// 投资表
-model Investment {
-  id            String       @id @default(uuid())
-  name          String       @db.VarChar(255)
-  type          String       @db.VarChar(50) // '贵金属' | '股权投资' | '固收理财'
-  amount        Decimal      @db.Decimal(12, 2)
-  status        String       @default("holding") // 'holding' | 'sold'
-  note          String?      @db.Text
-  purchaseDate  DateTime     @db.Date
-  accountBookId String?      // 关联账本（可选）
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-
-  // 关系
-  accountBook   AccountBook? @relation(fields: [accountBookId], references: [id], onDelete: Cascade)
+  transactions    Transaction[]
+  tags            Tag[]
+  balanceLogs     BalanceLog[]
 
   @@index([type])
-  @@index([status])
-  @@index([accountBookId])
-}
-
-// 账本表（扩展功能配置）
-model AccountBook {
-  id               String    @id @default(uuid())
-  name             String    @db.VarChar(100)
-  description      String?   @db.Text
-  icon             String    @db.VarChar(10)
-  color            String    @db.VarChar(20)
-  isDefault        Boolean   @default(false)
-
-  // 账本类型和功能配置
-  type             String    @default("personal") @db.VarChar(50)  // 'personal' | 'business_simple' | 'custom'
-  features         Json?     // 功能开关配置 { creditAccount: boolean, reimbursement: boolean, budget: boolean, investment: boolean, tags: boolean }
-
-  // 余额相关字段
-  initialBalance   Decimal   @default(0) @db.Decimal(12, 2)     // 初始余额
-  currentBalance   Decimal   @default(0) @db.Decimal(12, 2)     // 当前余额
-  balanceMode      String    @default("mixed") @db.VarChar(20)  // 'manual' | 'auto' | 'mixed'
-
-  // 原Config表字段（可选并入）
-  config           Json?     // 账本级配置（如工资日、还款日等）
-
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-
-  // 关系
-  transactions   Transaction[]  // 新增：统一交易关系
-  expenses       Expense[]      // 保留用于迁移
-  incomes        Income[]       // 保留用于迁移
-  balanceLogs    BalanceLog[]
-  budgets        Budget[]
-  creditAccounts CreditAccount[]
-  tags           Tag[]
-  investments    Investment[]   // 保留用于迁移
-
   @@index([isDefault])
 }
 
-// 预算表
-model Budget {
-  id                String       @id @default(uuid())
-  categoryTagId     String       // 分类标签ID（替代原来的 category 字符串）
-  amount            Decimal      @db.Decimal(10, 2)
-  period            String       @db.VarChar(20) // 'daily' | 'weekly' | 'monthly' | 'yearly'
-  startDate         DateTime     @db.Date
-  accountBookId     String?
-  warningThreshold  Int          @default(80)
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
-
-  // 关系
-  accountBook       AccountBook? @relation(fields: [accountBookId], references: [id], onDelete: SetNull)
-  categoryTag       Tag          @relation(fields: [categoryTagId], references: [id], onDelete: Restrict)
-
-  @@index([period])
-  @@index([categoryTagId])
-  @@index([accountBookId, categoryTagId])  // 复合索引 - 预算检查查询优化
-}
-
-// 信用账户表
-model CreditAccount {
-  id                String   @id @default(uuid())
-  name              String   @db.VarChar(100)          // e.g., "支付宝-花呗"
-  provider          String   @db.VarChar(100)          // e.g., "支付宝"
-  type              String   @db.VarChar(50)           // 'alipay_huabei' | 'jd_baitiao' | etc.
-  currentDebt       Decimal  @default(0) @db.Decimal(12, 2)  // 当前欠款
-  creditLimit       Decimal? @db.Decimal(12, 2)        // 信用额度（可选）
-  repaymentDay      Int                                // 每月还款日（1-31）
-  monthlyRepayment  Decimal? @db.Decimal(12, 2)        // 固定月还款额（可选）
-  status            String   @default("active")        // 'active' | 'settled' | 'suspended'
-  accountBookId     String
-  note              String?  @db.Text
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  // 关系
-  accountBook       AccountBook     @relation(fields: [accountBookId], references: [id], onDelete: Cascade)
-  debtChangeLogs    DebtChangeLog[]
-
-  @@index([accountBookId])
-  @@index([status])
-  @@index([type])
-}
-
-// 债务变更日志表
-model DebtChangeLog {
-  id                 String   @id @default(uuid())
-  creditAccountId    String
-  changeType         String                            // 'repayment' | 'manual_update' | 'debt_increase'
-  amountBefore       Decimal  @db.Decimal(12, 2)       // 变更前金额
-  amountAfter        Decimal  @db.Decimal(12, 2)       // 变更后金额
-  changeAmount       Decimal  @db.Decimal(12, 2)       // 变更金额
-  note               String?  @db.Text
-  relatedExpenseId   String?                           // 关联支出ID（还款时）
-  createdAt          DateTime @default(now())
-
-  // 关系
-  creditAccount      CreditAccount @relation(fields: [creditAccountId], references: [id], onDelete: Cascade)
-
-  @@index([creditAccountId])
-  @@index([createdAt])
-  @@index([changeType])
-}
-
-// 标签表
-model Tag {
-  id               String   @id @default(uuid())
-  name             String   @unique @db.VarChar(50)
-  type             String   @db.VarChar(20)  // 'category' | 'label'
-  color            String   @db.VarChar(20)
-  icon             String?  @db.VarChar(10)
-  accountBookId    String?  // null = 全局标签，有值 = 账本专属标签
-  applicableTypes  String[] @default([])  // 适用的交易类型：['income','expense','investment']，空数组表示全部
-  count            Int      @default(0)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-
-  // 关系
-  transactions      Transaction[]     @relation("TransactionCategoryTag")  // 新增：统一交易关系
-  expenses          Expense[]         @relation("ExpenseCategoryTag")      // 保留用于迁移
-  incomes           Income[]          @relation("IncomeCategoryTag")       // 保留用于迁移
-  accountBook       AccountBook?      @relation(fields: [accountBookId], references: [id], onDelete: SetNull)
-  budgets           Budget[]
-  expenseTemplates  ExpenseTemplate[]
-  recurringExpenses RecurringExpense[]
-
-  @@index([type])
-  @@index([accountBookId])
-}
-
-// 支出模板表
-model ExpenseTemplate {
-  id                  String   @id @default(uuid())
-  name                String   @db.VarChar(100)
-  categoryTagId       String   // 分类标签ID（替代原来的 category 字符串）
-  amount              Decimal  @db.Decimal(10, 2)
-  description         String   @db.VarChar(255)
-  needsReimbursement  Boolean  @default(false)
-  labelTagIds         String[] // 普通标签ID数组（替代原来的 tags）
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-
-  // 关系
-  categoryTag         Tag      @relation(fields: [categoryTagId], references: [id], onDelete: Restrict)
-
-  @@index([categoryTagId])
-}
-
-// 循环支出表
-model RecurringExpense {
-  id            String    @id @default(uuid())
-  name          String    @db.VarChar(100)
-  categoryTagId String    // 分类标签ID（替代原来的 category 字符串）
-  amount        Decimal   @db.Decimal(10, 2)
-  description   String    @db.VarChar(255)
-  frequency     String    @db.VarChar(20) // 'daily' | 'weekly' | 'monthly' | 'yearly'
-  dayOfWeek     Int?      // 0-6
-  dayOfMonth    Int?      // 1-31
-  monthOfYear   Int?      // 1-12
-  startDate     DateTime  @db.Date
-  endDate       DateTime? @db.Date
-  lastExecuted  DateTime?
-  enabled       Boolean   @default(true)
-  autoCreate    Boolean   @default(false)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  // 关系
-  categoryTag   Tag       @relation(fields: [categoryTagId], references: [id], onDelete: Restrict)
-
-  @@index([enabled])
-  @@index([categoryTagId])
-}
-
-// 统一交易表（合并Income、Expense、Investment）
+// ============================================================================
+// 交易表 - 核心实体
+// 参考: Firefly III的Transaction简化版
+// ============================================================================
 model Transaction {
-  id                  String         @id @default(uuid())
-  type                String         @db.VarChar(20)  // 'income' | 'expense' | 'investment'
-  subType             String?        @db.VarChar(50)  // 细分类型（如投资的买入/卖出）
-  date                DateTime       @db.Date
-  categoryTagId       String         // 分类标签ID
-  amount              Decimal        @db.Decimal(12, 2)
-  description         String         @db.VarChar(255)
-  accountBookId       String?
-  note                String?        @db.Text
+  id              String   @id @default(uuid())
+  accountBookId   String                          // 关联账本（必填）
 
-  // 原Expense独有字段
-  needsReimbursement  Boolean        @default(false)
-  labelTagIds         String[]       // 普通标签ID数组
-  receiptPhoto        String?
-  location            String?
+  // 交易基本信息
+  type            String   @db.VarChar(20)       // 'income' | 'expense'
+  amount          Decimal  @db.Decimal(15, 2)    // 金额（必须>0）
+  date            DateTime @db.Date              // 交易日期
 
-  // 原Investment独有字段（存储在metadata中）
-  metadata            Json?          // 扩展数据（如投资状态、购买日期等）
+  // 分类标签（必选）
+  categoryTagId   String                          // 分类标签ID
 
-  createdAt           DateTime       @default(now())
-  updatedAt           DateTime       @updatedAt
+  // 描述信息
+  description     String?  @db.VarChar(500)      // 交易描述
+  notes           String?  @db.Text              // 备注
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   // 关系
-  reimbursement       Reimbursement? @relation("TransactionReimbursement")
-  accountBook         AccountBook?   @relation(fields: [accountBookId], references: [id], onDelete: SetNull)
-  categoryTag         Tag            @relation("TransactionCategoryTag", fields: [categoryTagId], references: [id], onDelete: Restrict)
-  balanceLogs         BalanceLog[]   @relation("TransactionBalanceLog")
+  accountBook     AccountBook     @relation(fields: [accountBookId], references: [id], onDelete: Cascade)
+  categoryTag     Tag             @relation("TransactionCategory", fields: [categoryTagId], references: [id], onDelete: Restrict)
+  labelTags       TransactionTag[] // 普通标签（多对多）
+  balanceLogs     BalanceLog[]
 
   // 单字段索引
-  @@index([date])
+  @@index([accountBookId])
   @@index([type])
-  @@index([categoryTagId])
-  @@index([accountBookId])
-
-  // 复合索引 - 优化常用查询场景
-  @@index([accountBookId, date])           // 按账本和日期查询
-  @@index([accountBookId, type, date])     // 按账本、类型和日期查询（预算统计）
-  @@index([categoryTagId, date])           // 按分类和日期查询（分类统计）
-  @@index([type, date])                    // 按类型和日期查询（收支统计）
-}
-
-// 收入表（保留用于数据迁移，后续将删除）
-model Income {
-  id                String       @id @default(uuid())
-  date              DateTime     @db.Date
-  categoryTagId     String       // 收入分类标签ID（如：工资、奖金、投资收益等）
-  amount            Decimal      @db.Decimal(10, 2)
-  description       String       @db.VarChar(255)
-  accountBookId     String?
-  note              String?      @db.Text
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
-
-  // 关系
-  accountBook       AccountBook? @relation(fields: [accountBookId], references: [id], onDelete: SetNull)
-  categoryTag       Tag          @relation("IncomeCategoryTag", fields: [categoryTagId], references: [id], onDelete: Restrict)
-
   @@index([date])
   @@index([categoryTagId])
+
+  // 复合索引 - 优化常用查询
+  @@index([accountBookId, date])
+  @@index([accountBookId, type, date])
+  @@index([categoryTagId, date])
+}
+
+// ============================================================================
+// 标签表 - 灵活的分类系统
+// 参考: Firefly III的Category + Tag设计
+// ============================================================================
+model Tag {
+  id              String   @id @default(uuid())
+  name            String   @db.VarChar(50)       // 标签名称
+
+  // 标签类型（Firefly III实践）
+  tagType         String   @db.VarChar(20)       // 'category' | 'label'
+
+  // 作用域（MoneyNote + 创新）
+  scope           String   @default("global") @db.VarChar(20) // 'global' | 'account_book'
+  accountBookId   String?                         // 账本专属标签的所属账本
+
+  // 显示相关
+  color           String   @default("#666666") @db.VarChar(20)
+  icon            String?  @db.VarChar(50)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // 关系
+  accountBook         AccountBook?     @relation(fields: [accountBookId], references: [id], onDelete: Cascade)
+  categoryTransactions Transaction[]   @relation("TransactionCategory") // 作为分类标签的交易
+  labelTransactions   TransactionTag[] // 作为普通标签的交易
+
+  // 唯一约束：同一范围内标签名不重复
+  @@unique([name, scope, accountBookId])
+
+  @@index([tagType])
+  @@index([scope])
   @@index([accountBookId])
 }
 
-// 余额变动日志表
-model BalanceLog {
-  id                   String        @id @default(uuid())
-  accountBookId        String
-  changeType           String        @db.VarChar(20)  // 'income' | 'expense' | 'manual_adjust' | 'initial' | 'investment'
-  amountBefore         Decimal       @db.Decimal(12, 2)  // 变更前余额
-  amountAfter          Decimal       @db.Decimal(12, 2)  // 变更后余额
-  changeAmount         Decimal       @db.Decimal(12, 2)  // 变更金额（正数=增加，负数=减少）
-  note                 String?       @db.Text
-  relatedTransactionId String?       // 关联交易ID（新增）
-  relatedIncomeId      String?       // 保留用于迁移
-  relatedExpenseId     String?       // 保留用于迁移
-  createdAt            DateTime      @default(now())
+// ============================================================================
+// 交易-标签关联表 - 多对多关系
+// 用于Label类型标签与交易的关联
+// ============================================================================
+model TransactionTag {
+  id              String   @id @default(uuid())
+  transactionId   String
+  tagId           String
+
+  createdAt       DateTime @default(now())
 
   // 关系
-  accountBook          AccountBook   @relation(fields: [accountBookId], references: [id], onDelete: Cascade)
-  transaction          Transaction?  @relation("TransactionBalanceLog", fields: [relatedTransactionId], references: [id], onDelete: SetNull)
+  transaction     Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  tag             Tag         @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  // 唯一约束（同一交易不能重复添加同一标签）
+  @@unique([transactionId, tagId])
+
+  @@index([transactionId])
+  @@index([tagId])
+}
+
+// ============================================================================
+// 余额变动日志表 - 审计追踪
+// ============================================================================
+model BalanceLog {
+  id              String   @id @default(uuid())
+  accountBookId   String
+
+  changeType      String   @db.VarChar(20) // 'income' | 'expense' | 'manual_adjust' | 'initial'
+  amountBefore    Decimal  @db.Decimal(15, 2) // 变更前余额
+  amountAfter     Decimal  @db.Decimal(15, 2) // 变更后余额
+  changeAmount    Decimal  @db.Decimal(15, 2) // 变更金额
+
+  note            String?  @db.Text
+  transactionId   String?                     // 关联交易ID
+
+  createdAt       DateTime @default(now())
+
+  // 关系
+  accountBook     AccountBook  @relation(fields: [accountBookId], references: [id], onDelete: Cascade)
+  transaction     Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
 
   @@index([accountBookId])
   @@index([createdAt])
   @@index([changeType])
-  @@index([relatedTransactionId])
-}
-
-// 配置表
-model Config {
-  id                     String   @id @default("main")
-  jiebeiTotal            Decimal  @db.Decimal(10, 2)
-  salary                 Decimal  @db.Decimal(10, 2)
-  salaryDate             String   @db.VarChar(20)
-  jiebeiDueDate          String   @db.VarChar(20)
-  investmentCapital      Decimal  @db.Decimal(12, 2)
-  currentAccountBookId   String?
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  @@index([transactionId])
 }
