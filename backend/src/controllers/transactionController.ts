@@ -3,12 +3,54 @@ import * as transactionService from '../services/transactionService'
 
 /**
  * 统一交易控制器 - 处理所有交易相关的HTTP请求
+ *
+ * API 端点概览：
+ * - GET    /api/transactions           - 获取交易列表（支持分页和筛选）
+ * - GET    /api/transactions/:id       - 获取单个交易详情
+ * - POST   /api/transactions           - 创建新交易
+ * - PUT    /api/transactions/:id       - 更新交易
+ * - DELETE /api/transactions/:id       - 删除交易
+ * - GET    /api/transactions/stats     - 获取交易统计
+ * - GET    /api/transactions/by-date   - 按日期范围获取交易
+ * - POST   /api/transactions/batch     - 批量创建交易
  */
 
-// 获取所有交易
+/**
+ * @api {get} /api/transactions 获取交易列表
+ * @apiName GetTransactions
+ * @apiGroup Transaction
+ *
+ * @apiQuery {String} [accountBookId] 账本ID，不传则返回所有账本交易，传 'global' 只返回全局交易
+ * @apiQuery {String} [type] 交易类型：income | expense | investment
+ * @apiQuery {String} [categoryTagId] 分类标签ID
+ * @apiQuery {String} [startDate] 开始日期 YYYY-MM-DD
+ * @apiQuery {String} [endDate] 结束日期 YYYY-MM-DD
+ * @apiQuery {Boolean} [needsReimbursement] 是否需要报销
+ * @apiQuery {Number} [page=1] 页码（从1开始）
+ * @apiQuery {Number} [pageSize=50] 每页数量（最大100）
+ *
+ * @apiSuccess {Boolean} success 是否成功
+ * @apiSuccess {Object[]} data.data 交易列表
+ * @apiSuccess {Object} data.pagination 分页信息
+ *
+ * @apiSuccessExample Success-Response:
+ *   HTTP/1.1 200 OK
+ *   {
+ *     "success": true,
+ *     "data": {
+ *       "data": [...],
+ *       "pagination": {
+ *         "page": 1,
+ *         "pageSize": 50,
+ *         "total": 150,
+ *         "totalPages": 3
+ *       }
+ *     }
+ *   }
+ */
 export const getAllTransactions = async (req: Request, res: Response) => {
   try {
-    const { type, accountBookId, categoryTagId, startDate, endDate, needsReimbursement } = req.query
+    const { type, accountBookId, categoryTagId, startDate, endDate, needsReimbursement, page, pageSize } = req.query
 
     const filters = {
       type: type as transactionService.TransactionType | undefined,
@@ -17,12 +59,14 @@ export const getAllTransactions = async (req: Request, res: Response) => {
       startDate: startDate as string | undefined,
       endDate: endDate as string | undefined,
       needsReimbursement: needsReimbursement === 'true' ? true : needsReimbursement === 'false' ? false : undefined,
+      page: page ? parseInt(page as string, 10) : undefined,
+      pageSize: pageSize ? parseInt(pageSize as string, 10) : undefined,
     }
 
-    const transactions = await transactionService.getAllTransactions(filters)
+    const result = await transactionService.getAllTransactions(filters)
     res.json({
       success: true,
-      data: transactions,
+      data: result,
     })
   } catch (error) {
     console.error('Failed to get transactions:', error)
@@ -33,7 +77,18 @@ export const getAllTransactions = async (req: Request, res: Response) => {
   }
 }
 
-// 获取单个交易
+/**
+ * @api {get} /api/transactions/:id 获取单个交易详情
+ * @apiName GetTransactionById
+ * @apiGroup Transaction
+ *
+ * @apiParam {String} id 交易ID
+ *
+ * @apiSuccess {Boolean} success 是否成功
+ * @apiSuccess {Object} data 交易详情（包含账本、分类标签、报销信息）
+ *
+ * @apiError (404) NotFound 交易不存在
+ */
 export const getTransactionById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params
@@ -59,7 +114,28 @@ export const getTransactionById = async (req: Request, res: Response) => {
   }
 }
 
-// 创建交易
+/**
+ * @api {post} /api/transactions 创建新交易
+ * @apiName CreateTransaction
+ * @apiGroup Transaction
+ *
+ * @apiBody {String} type 交易类型：income | expense | investment
+ * @apiBody {String} date 交易日期（YYYY-MM-DD 格式）
+ * @apiBody {Number} amount 交易金额（正数）
+ * @apiBody {String} description 交易描述
+ * @apiBody {String} categoryTagId 分类标签ID
+ * @apiBody {String} [accountBookId] 账本ID（可选，不传则为全局交易）
+ * @apiBody {String} [subType] 子类型（投资类型时：buy | sell）
+ * @apiBody {String[]} [labelTagIds] 普通标签ID数组（仅支出类型）
+ * @apiBody {Boolean} [needsReimbursement=false] 是否需要报销
+ * @apiBody {String} [note] 备注
+ *
+ * @apiSuccess {Boolean} success 是否成功
+ * @apiSuccess {Object} data 创建的交易详情
+ *
+ * @apiError (400) BadRequest 缺少必填字段或字段格式错误
+ * @apiError (400) TagNotAvailable 标签不适用于该交易类型或账本
+ */
 export const createTransaction = async (req: Request, res: Response) => {
   try {
     const transactionData = req.body
@@ -69,7 +145,7 @@ export const createTransaction = async (req: Request, res: Response) => {
         !transactionData.description || !transactionData.categoryTagId) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields',
+        error: 'Missing required fields: type, date, amount, description, categoryTagId',
       })
     }
 
@@ -86,11 +162,14 @@ export const createTransaction = async (req: Request, res: Response) => {
       success: true,
       data: transaction,
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to create transaction:', error)
-    res.status(500).json({
+    // 返回更具体的错误信息
+    const errorMessage = error.message || 'Failed to create transaction'
+    const statusCode = errorMessage.includes('标签') ? 400 : 500
+    res.status(statusCode).json({
       success: false,
-      error: 'Failed to create transaction',
+      error: errorMessage,
     })
   }
 }

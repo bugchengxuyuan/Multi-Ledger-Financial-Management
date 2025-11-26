@@ -609,15 +609,41 @@ export const useFinanceStore = create<FinanceStore>((set, get) => ({
     }))
   },
 
+  /**
+   * 设置默认账本
+   *
+   * 乐观更新 + API 确认模式：
+   * 1. 立即更新本地状态（提升用户体验）
+   * 2. 调用 API 确认更新
+   * 3. 使用 API 返回的完整数据覆盖本地状态（确保一致性）
+   * 4. 如果失败则回滚
+   */
   setDefaultAccountBook: async (id) => {
-    await accountBooksApi.setDefault(id)
+    // 保存旧状态用于回滚
+    const oldAccountBooks = get().accountBooks
 
-    // Reload account books to get updated state
-    const accountBooks = await accountBooksApi.getAll()
-    set({ accountBooks })
+    // 乐观更新：立即更新本地状态
+    set(state => ({
+      accountBooks: state.accountBooks.map(ab => ({
+        ...ab,
+        isDefault: ab.id === id,
+      })),
+    }))
 
-    // 更新配置
-    await get().updateConfig({ currentAccountBookId: id })
+    try {
+      // API 调用返回所有账本的最新状态
+      const updatedAccountBooks = await accountBooksApi.setDefault(id)
+
+      // 使用 API 返回的完整数据更新状态（确保与服务端一致）
+      set({ accountBooks: updatedAccountBooks })
+
+      // 更新配置
+      await get().updateConfig({ currentAccountBookId: id })
+    } catch (error) {
+      // 失败时回滚到旧状态
+      set({ accountBooks: oldAccountBooks })
+      throw error
+    }
   },
 
   // ===== 预算相关 =====

@@ -74,7 +74,15 @@ export const deleteBudget = async (id: string) => {
   })
 }
 
-// 获取预算使用情况
+/**
+ * 获取预算使用情况
+ *
+ * 查询逻辑：
+ * - 使用统一的 Transaction 表（替代旧的 Expense 表）
+ * - 只统计 type='expense' 的交易
+ * - 按 categoryTagId 和日期范围过滤
+ * - 如果预算关联账本，只统计该账本的支出
+ */
 export const getBudgetUsage = async (id: string) => {
   const budget = await prisma.budget.findUnique({
     where: { id },
@@ -85,8 +93,9 @@ export const getBudgetUsage = async (id: string) => {
     throw new Error('Budget not found')
   }
 
-  // 计算该预算期间的实际支出
-  const where: Prisma.ExpenseWhereInput = {
+  // 计算该预算期间的实际支出（使用 Transaction 表替代 Expense 表）
+  const where: Prisma.TransactionWhereInput = {
+    type: 'expense',  // 只统计支出类型
     categoryTagId: budget.categoryTagId,
     date: {
       gte: budget.startDate,
@@ -97,7 +106,7 @@ export const getBudgetUsage = async (id: string) => {
     where.accountBookId = budget.accountBookId
   }
 
-  const expenses = await prisma.expense.aggregate({
+  const expenses = await prisma.transaction.aggregate({
     where,
     _sum: { amount: true },
   })
