@@ -132,6 +132,7 @@ model Budget {
 
   @@index([period])
   @@index([categoryTagId])
+  @@index([accountBookId, categoryTagId])  // 复合索引 - 预算检查查询优化
 }
 
 // 信用账户表
@@ -279,10 +280,17 @@ model Transaction {
   categoryTag         Tag            @relation("TransactionCategoryTag", fields: [categoryTagId], references: [id], onDelete: Restrict)
   balanceLogs         BalanceLog[]   @relation("TransactionBalanceLog")
 
+  // 单字段索引
   @@index([date])
   @@index([type])
   @@index([categoryTagId])
   @@index([accountBookId])
+
+  // 复合索引 - 优化常用查询场景
+  @@index([accountBookId, date])           // 按账本和日期查询
+  @@index([accountBookId, type, date])     // 按账本、类型和日期查询（预算统计）
+  @@index([categoryTagId, date])           // 按分类和日期查询（分类统计）
+  @@index([type, date])                    // 按类型和日期查询（收支统计）
 }
 
 // 收入表（保留用于数据迁移，后续将删除）

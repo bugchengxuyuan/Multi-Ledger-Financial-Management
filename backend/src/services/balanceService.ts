@@ -8,9 +8,19 @@ import { Prisma } from '@prisma/client'
  * 集中管理所有余额相关操作：
  * - 交易创建时的余额更新
  * - 交易删除时的余额恢复
+ * - 交易更新时的余额调整
  * - 手动余额调整
  * - 初始余额设置
  * - 余额日志记录
+ *
+ * ⚠️ 需要触发余额更新的场景清单：
+ * 1. 创建交易 → transactionService.create() 调用 updateBalanceOnTransactionCreate()
+ * 2. 更新交易 → transactionService.update() 调用 updateBalanceOnTransactionUpdate()
+ * 3. 删除交易 → transactionService.delete() 调用 updateBalanceOnTransactionDelete()
+ * 4. 手动调整余额 → adjustAccountBookBalance()
+ * 5. 设置初始余额 → setInitialBalance()
+ *
+ * 注意：所有余额更新操作都应在事务中执行，确保原子性
  */
 
 // 交易类型
@@ -18,11 +28,33 @@ export type TransactionType = 'income' | 'expense' | 'investment'
 
 /**
  * 计算交易对余额的影响
- * @param type 交易类型
- * @param subType 交易子类型（主要用于投资）
- * @param amount 交易金额
- * @param currentBalance 当前余额
- * @returns 新余额
+ *
+ * 余额变动规则：
+ * - income（收入）：增加余额（+amount）
+ * - expense（支出）：减少余额（-amount）
+ * - investment.buy（投资买入）：减少余额（-amount，用现金购买资产）
+ * - investment.sell（投资卖出）：增加余额（+amount，出售资产获得现金）
+ *
+ * @param type - 交易类型：'income' | 'expense' | 'investment'
+ * @param subType - 子类型：对于投资类型，可以是 'buy' | 'sell'
+ * @param amount - 交易金额（必须为正数）
+ * @param currentBalance - 当前余额
+ * @returns 新的余额
+ *
+ * @example
+ * // 收入 1000 元
+ * calculateBalanceChange('income', null, new Decimal(1000), new Decimal(5000))
+ * // => Decimal(6000)
+ *
+ * @example
+ * // 支出 500 元
+ * calculateBalanceChange('expense', null, new Decimal(500), new Decimal(5000))
+ * // => Decimal(4500)
+ *
+ * @example
+ * // 投资买入 2000 元
+ * calculateBalanceChange('investment', 'buy', new Decimal(2000), new Decimal(5000))
+ * // => Decimal(3000)
  */
 export const calculateBalanceChange = (
   type: TransactionType,
@@ -32,16 +64,21 @@ export const calculateBalanceChange = (
 ): Decimal => {
   switch (type) {
     case 'income':
+      // 收入增加余额
       return currentBalance.add(amount)
     case 'expense':
+      // 支出减少余额
       return currentBalance.sub(amount)
     case 'investment':
-      // 投资买入减少余额，卖出增加余额
+      // 投资买入减少余额（用现金购买资产）
       if (subType === 'buy') {
         return currentBalance.sub(amount)
-      } else if (subType === 'sell') {
+      }
+      // 投资卖出增加余额（出售资产获得现金）
+      else if (subType === 'sell') {
         return currentBalance.add(amount)
       }
+      // 其他投资子类型不影响余额
       return currentBalance
     default:
       return currentBalance

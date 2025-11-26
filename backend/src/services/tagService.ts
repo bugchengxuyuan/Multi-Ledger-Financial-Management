@@ -26,6 +26,120 @@ export const validateApplicableTypes = (types: string[]) => {
   return true
 }
 
+/**
+ * 检查标签是否可用于指定账本
+ *
+ * 规则：
+ * - 全局标签（accountBookId 为 null）对所有账本可用
+ * - 专属标签只能在对应账本使用
+ *
+ * @param tag 标签对象
+ * @param accountBookId 目标账本ID
+ * @returns 是否可用
+ */
+export const isTagAvailableForAccountBook = (
+  tag: { accountBookId: string | null },
+  accountBookId: string | null
+): boolean => {
+  // 全局标签（accountBookId 为 null）对所有账本可用
+  if (!tag.accountBookId) return true
+
+  // 专属标签只能在对应账本使用
+  return tag.accountBookId === accountBookId
+}
+
+/**
+ * 验证标签是否可用于指定账本，不可用则抛出错误
+ *
+ * @param tagId 标签ID
+ * @param accountBookId 目标账本ID
+ * @throws 如果标签不存在或不可用于该账本
+ */
+export const validateTagForAccountBook = async (
+  tagId: string,
+  accountBookId: string | null
+): Promise<void> => {
+  const tag = await prisma.tag.findUnique({
+    where: { id: tagId },
+  })
+
+  if (!tag) {
+    throw new Error(`标签不存在: ${tagId}`)
+  }
+
+  if (!isTagAvailableForAccountBook(tag, accountBookId)) {
+    throw new Error(
+      `标签"${tag.name}"是账本专属标签，不能在其他账本使用`
+    )
+  }
+}
+
+/**
+ * 批量验证标签是否可用于指定账本
+ *
+ * @param tagIds 标签ID数组
+ * @param accountBookId 目标账本ID
+ * @throws 如果任何标签不可用于该账本
+ */
+export const validateTagsForAccountBook = async (
+  tagIds: string[],
+  accountBookId: string | null
+): Promise<void> => {
+  if (!tagIds || tagIds.length === 0) return
+
+  const tags = await prisma.tag.findMany({
+    where: { id: { in: tagIds } },
+  })
+
+  // 检查是否所有标签都存在
+  const foundIds = new Set(tags.map(t => t.id))
+  const missingIds = tagIds.filter(id => !foundIds.has(id))
+  if (missingIds.length > 0) {
+    throw new Error(`标签不存在: ${missingIds.join(', ')}`)
+  }
+
+  // 检查每个标签是否可用于该账本
+  for (const tag of tags) {
+    if (!isTagAvailableForAccountBook(tag, accountBookId)) {
+      throw new Error(
+        `标签"${tag.name}"是账本专属标签，不能在其他账本使用`
+      )
+    }
+  }
+}
+
+/**
+ * 获取账本可用的标签列表
+ *
+ * @param accountBookId 账本ID，null 表示只获取全局标签
+ * @param tagType 标签类型：'category' | 'label'
+ * @returns 可用标签列表
+ */
+export const getAvailableTagsForAccountBook = async (
+  accountBookId: string | null,
+  tagType?: 'category' | 'label'
+) => {
+  const where: Prisma.TagWhereInput = {
+    // 全局标签 或 当前账本的专属标签
+    OR: [
+      { accountBookId: null },  // 全局标签
+      ...(accountBookId ? [{ accountBookId }] : []),  // 账本专属标签（如果指定了账本）
+    ],
+  }
+
+  if (tagType) {
+    where.type = tagType
+  }
+
+  return await prisma.tag.findMany({
+    where,
+    orderBy: [
+      { type: 'asc' },
+      { count: 'desc' },  // 按使用次数降序
+    ],
+  })
+}
+
 // 获取所有标签（支持筛选）
 export const getAllTags = async (filters?: {
   type?: string
