@@ -1,18 +1,18 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import {
-  Plus, Trash2, Search, SlidersHorizontal, Edit, Download,
-  TrendingUp, PieChart as PieChartIcon, Calendar, Receipt,
-  CircleDollarSign, Layers
+  Plus, Trash2, Search, SlidersHorizontal, Edit,
+  TrendingUp, PieChart as PieChartIcon, Receipt,
+  CircleDollarSign
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useFinanceStore } from '@/store/useFinanceStore'
 import { formatCurrency, formatShortDate, toNumber } from '@/utils/formatters'
-import type { Transaction, TransactionType, Tag } from '@/store/types'
+import type { Transaction, TransactionType } from '@/store/types'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import { INVESTMENT_TYPES } from '@/utils/constants'
 
@@ -24,12 +24,9 @@ export default function Transactions() {
     addTransaction,
     updateTransaction,
     deleteTransaction,
-    tags,
     getCategoryTags,
-    getLabelTags,
     getTagById,
     config,
-    accountBooks,
   } = useFinanceStore()
 
   // Tab状态
@@ -77,7 +74,6 @@ export default function Transactions() {
 
   // 获取分类标签
   const allCategoryTags = getCategoryTags()
-  const allLabelTags = getLabelTags()
 
   // 根据当前Tab筛选交易
   const currentTypeTransactions = useMemo(() => {
@@ -218,7 +214,7 @@ export default function Transactions() {
       transactionData.subType = formData.subType
       transactionData.metadata = {
         status: formData.status,
-        investmentType: formData.investmentType,
+        originalType: formData.investmentType,
         name: formData.description,
       }
     }
@@ -280,7 +276,7 @@ export default function Transactions() {
       location: txn.location || '',
       subType: (txn.subType as 'buy' | 'sell') || 'buy',
       investmentType:
-        (txn.metadata as any)?.investmentType || 'fixed_income',
+        (txn.metadata as any)?.originalType || 'fixed_income',
       status: (txn.metadata as any)?.status || 'holding',
     })
     setIsOpen(true)
@@ -401,7 +397,7 @@ export default function Transactions() {
                     <option value="">选择分类</option>
                     {allCategoryTags.map((tag) => (
                       <option key={tag.id} value={tag.id}>
-                        {tag.icon} {tag.name}
+                        {tag.name}
                       </option>
                     ))}
                   </select>
@@ -444,27 +440,6 @@ export default function Transactions() {
                     </select>
                   </div>
                 </>
-              )}
-
-              {/* 支出特有字段 */}
-              {formData.type === 'expense' && (
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="needsReimbursement"
-                    checked={formData.needsReimbursement}
-                    onChange={(e) =>
-                      setFormData({ ...formData, needsReimbursement: e.target.checked })
-                    }
-                    className="rounded border-gray-300"
-                  />
-                  <Label
-                    htmlFor="needsReimbursement"
-                    className="text-sm text-slate-700 dark:text-slate-300"
-                  >
-                    需要报销
-                  </Label>
-                </div>
               )}
 
               <div>
@@ -596,7 +571,7 @@ export default function Transactions() {
                     <option value="all">所有分类</option>
                     {allCategoryTags.map((tag) => (
                       <option key={tag.id} value={tag.id}>
-                        {tag.icon} {tag.name}
+                        {tag.name}
                       </option>
                     ))}
                   </select>
@@ -695,19 +670,14 @@ export default function Transactions() {
                           className="w-10 h-10 rounded-full flex items-center justify-center text-xl"
                           style={{ backgroundColor: `${categoryTag?.color}20` }}
                         >
-                          {categoryTag?.icon || '📝'}
+                          {categoryTag?.name?.[0] || '📝'}
                         </div>
                         <div className="flex-1">
                           <div className="font-medium text-slate-900 dark:text-slate-100">
                             {txn.description}
                           </div>
                           <div className="text-sm text-slate-500 dark:text-slate-400">
-                            {formatShortDate(txn.date)} • {categoryTag?.name || '未分类'}
-                            {txn.needsReimbursement && (
-                              <span className="ml-2 px-2 py-0.5 rounded text-xs bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
-                                需报销
-                              </span>
-                            )}
+                            {formatShortDate(txn.date)} · {categoryTag?.name || '未分类'}
                           </div>
                         </div>
                       </div>

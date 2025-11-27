@@ -28,35 +28,52 @@ app.get('/health', (req, res) => {
   })
 })
 
-// ===== API 路由 =====
-import transactionsRouter from './routes/transactions'  // 新增：统一交易路由
-import expensesRouter from './routes/expenses'
-import incomesRouter from './routes/incomes'
-import accountBooksRouter from './routes/accountBooks'
-import reimbursementsRouter from './routes/reimbursements'
-import investmentsRouter from './routes/investments'
-import budgetsRouter from './routes/budgets'
-import configRouter from './routes/config'
-import creditAccountsRouter from './routes/creditAccounts'
-import tagsRouter from './routes/tags'
+// ===== V1 API 路由 =====
+import v1Router from './routes/v1'
 
-app.use('/api/transactions', transactionsRouter)  // 新增：统一交易API
-app.use('/api/expenses', expensesRouter)          // 保留用于兼容
-app.use('/api/incomes', incomesRouter)            // 保留用于兼容
-app.use('/api/account-books', accountBooksRouter)
-app.use('/api/reimbursements', reimbursementsRouter)
-app.use('/api/investments', investmentsRouter)    // 保留用于兼容
-app.use('/api/budgets', budgetsRouter)
-app.use('/api/config', configRouter)
-app.use('/api/credit-accounts', creditAccountsRouter)
-app.use('/api/tags', tagsRouter)
+// V1 API（简化版本，基于业界最佳实践）
+app.use('/api/v1', v1Router)
+// Legacy route support (向后兼容旧的前端 API 调用)
+app.use('/api', v1Router)
+
+// 配置端点 (临时简单实现)
+app.get('/api/config', (req, res) => {
+  res.json({
+    id: 'main',
+    creditLimit: 0,
+    salary: 0,
+    salaryDate: '每月1日',
+    creditDueDate: '每月15日',
+    investmentCapital: 0,
+    currentAccountBookId: null,
+  })
+})
+
+app.put('/api/config', (req, res) => {
+  // 临时实现：直接返回请求的配置
+  res.json(req.body)
+})
+
+app.get('/api/config/current-account-book', (req, res) => {
+  res.json(null)
+})
+
+app.put('/api/config/current-account-book', (req, res) => {
+  res.json({ currentAccountBookId: req.body.accountBookId })
+})
 
 // 根路由
 app.get('/', (req, res) => {
   res.json({
-    message: 'Jiebei Finance Management API',
+    message: 'Multi-Ledger Financial Management API',
     version: '1.0.0',
-    docs: '/api/docs', // 未来可添加 API 文档
+    apiVersion: 'v1',
+    endpoints: {
+      accountBooks: '/api/v1/account-books',
+      transactions: '/api/v1/transactions',
+      tags: '/api/v1/tags',
+      statistics: '/api/v1/statistics',
+    },
   })
 })
 

@@ -41,8 +41,22 @@ const createApiClient = (): AxiosInstance => {
   // 响应拦截器
   client.interceptors.response.use(
     (response) => {
-      // 后端统一返回 { success, data, message } 格式
-      return response.data
+      // 兼容两种响应格式：
+      // 1. 包装格式: { success, data, message }
+      // 2. 直接返回: 数组或对象
+      const responseData = response.data
+
+      // 如果已经是包装格式，直接返回
+      if (responseData && typeof responseData === 'object' && 'success' in responseData) {
+        return responseData
+      }
+
+      // 如果是直接返回的数据，包装成标准格式
+      return {
+        success: true,
+        data: responseData,
+        timestamp: new Date().toISOString(),
+      }
     },
     (error: AxiosError<ApiResponse>) => {
       // 统一错误处理

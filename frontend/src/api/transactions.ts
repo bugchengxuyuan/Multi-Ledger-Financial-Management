@@ -85,9 +85,20 @@ export const transactionsApi = {
       })
     }
 
-    const response: ApiResponse<Transaction[]> = await api.get(
-      `/transactions${params.toString() ? `?${params.toString()}` : ''}`
+    // 添加大的分页参数以获取所有数据
+    params.append('page', '1')
+    params.append('pageSize', '1000')
+
+    const response: ApiResponse<any> = await api.get(
+      `/v1/transactions${params.toString() ? `?${params.toString()}` : ''}`
     )
+
+    // 处理分页响应格式 { data: [...], pagination: {...} }
+    if (response.data && typeof response.data === 'object' && 'data' in response.data) {
+      return response.data.data || []
+    }
+
+    // 兼容直接返回数组的格式
     return response.data || []
   },
 
