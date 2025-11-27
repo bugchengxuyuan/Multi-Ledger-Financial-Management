@@ -89,11 +89,7 @@ export const getAllTransactions = async (filters?: {
           },
         },
         categoryTag: true,
-        labelTags: {
-          include: {
-            tag: true,
-          },
-        },
+        // labelTagIds 是字符串数组，不是关系
       },
       orderBy: { date: 'desc' },
       skip,

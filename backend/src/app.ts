@@ -33,6 +33,34 @@ import v1Router from './routes/v1'
 
 // V1 API（简化版本，基于业界最佳实践）
 app.use('/api/v1', v1Router)
+// Legacy route support (向后兼容旧的前端 API 调用)
+app.use('/api', v1Router)
+
+// 配置端点 (临时简单实现)
+app.get('/api/config', (req, res) => {
+  res.json({
+    id: 'main',
+    creditLimit: 0,
+    salary: 0,
+    salaryDate: '每月1日',
+    creditDueDate: '每月15日',
+    investmentCapital: 0,
+    currentAccountBookId: null,
+  })
+})
+
+app.put('/api/config', (req, res) => {
+  // 临时实现：直接返回请求的配置
+  res.json(req.body)
+})
+
+app.get('/api/config/current-account-book', (req, res) => {
+  res.json(null)
+})
+
+app.put('/api/config/current-account-book', (req, res) => {
+  res.json({ currentAccountBookId: req.body.accountBookId })
+})
 
 // 根路由
 app.get('/', (req, res) => {

@@ -60,15 +60,11 @@ export const getAllTags = async (filters?: {
           name: true,
         },
       },
-      _count: {
-        select: {
-          categoryTransactions: true,
-          labelTransactions: true,
-        },
-      },
+      // _count 不使用，因为 labelTagIds 是数组字段，不是关系
+      // count 字段已经存储了使用次数
     },
     orderBy: [
-      { tagType: 'asc' },
+      { type: 'asc' },  // schema 中是 'type' 不是 'tagType'
       { name: 'asc' },
     ],
   })
@@ -125,15 +121,11 @@ export const getAvailableTags = async (
           name: true,
         },
       },
-      _count: {
-        select: {
-          categoryTransactions: true,
-          labelTransactions: true,
-        },
-      },
+      // _count 不使用，因为 labelTagIds 是数组字段，不是关系
+      // count 字段已经存储了使用次数
     },
     orderBy: [
-      { tagType: 'asc' },
+      { type: 'asc' },  // schema 中是 'type' 不是 'tagType'
       { name: 'asc' },
     ],
   })
